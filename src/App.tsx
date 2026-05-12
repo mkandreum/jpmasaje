@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Settings, User, Clock, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Phone, Mail, Leaf, MessageCircle, Send } from "lucide-react";
+import { Settings, User, Clock, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Phone, Mail, Leaf, MessageCircle, Send, LogOut } from "lucide-react";
 import { format, addDays, startOfToday, parseISO, isSameDay, setHours, setMinutes, isBefore } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast, Toaster } from "sonner";
@@ -114,6 +114,13 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("isAdmin");
+    setIsAdminAuth(false);
+    setShowAdminPanel(false);
+    toast.success("Sesión cerrada");
   };
 
   const currentHour = new Date();
@@ -311,7 +318,7 @@ export default function App() {
   return (
     <div className="w-full min-h-[100dvh] bg-[#0E1410] flex flex-col items-center sm:p-6 font-sans text-[#F9F8F6]">
       <Toaster position="top-center" richColors />
-      <div className="w-full max-w-md min-h-[100dvh] sm:min-h-[850px] sm:max-h-[90vh] bg-[#141A16] sm:rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative ring-1 ring-white/5">
+      <div className="w-full max-w-md min-h-[100dvh] sm:min-h-[850px] sm:h-[850px] sm:max-h-[96vh] bg-[#141A16] sm:rounded-[40px] shadow-2xl flex flex-col relative ring-1 ring-white/5 overflow-hidden">
         
         {/* Minimalist Hero */}
         <div className="relative h-64 w-full shrink-0">
@@ -337,9 +344,14 @@ export default function App() {
                  </a>
                )}
                {isAdminAuth && (
-                 <button onClick={() => setShowAdminPanel(true)} className="bg-[#8F7256] text-[#F9F8F6] p-2.5 rounded-full shadow-md hover:bg-[#A68A6B] transition-colors" title="Abrir Panel de Administrador">
-                   <User size={18} strokeWidth={1.5} />
-                 </button>
+                 <div className="flex gap-2">
+                   <button onClick={() => setShowAdminPanel(true)} className="bg-[#8F7256] text-[#F9F8F6] p-2.5 rounded-full shadow-md hover:bg-[#A68A6B] transition-colors" title="Abrir Panel de Administrador">
+                     <User size={18} strokeWidth={1.5} />
+                   </button>
+                   <button onClick={handleLogout} className="bg-[#1C201D]/80 backdrop-blur-md text-rose-500 p-2.5 rounded-full shadow-md hover:bg-rose-500 hover:text-[#F9F8F6] transition-all" title="Cerrar Sesión">
+                     <LogOut size={18} strokeWidth={1.5} />
+                   </button>
+                 </div>
                )}
             </div>
           </div>
@@ -351,7 +363,7 @@ export default function App() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto no-scrollbar relative px-8 pb-12 z-10 -mt-2">
+        <div className="flex-1 overflow-y-auto no-scrollbar relative px-8 pb-32 z-10 -mt-2">
           
           {/* Elegant Date Selector */}
           <div className="flex items-center justify-between mb-10 pb-6 border-b border-[#2A352B]">
@@ -621,7 +633,7 @@ export default function App() {
               <motion.button 
                 initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                 onClick={()=>setShowBot(true)}
-                className="absolute bottom-6 right-6 h-14 pl-5 pr-4 bg-[#8F7256] rounded-full shadow-[0_8px_20px_rgba(143,114,86,0.3)] flex items-center justify-center gap-3 text-[#F9F8F6] hover:scale-105 hover:bg-[#A68A6B] transition-transform z-40"
+                className="fixed bottom-8 right-6 h-14 pl-5 pr-4 bg-[#8F7256] rounded-full shadow-[0_8px_20px_rgba(143,114,86,0.5)] flex items-center justify-center gap-3 text-[#F9F8F6] hover:scale-105 hover:bg-[#A68A6B] transition-transform z-40"
               >
                   <span className="text-sm font-semibold tracking-wide">Gestiona tu cita</span>
                   <MessageCircle fill="#F9F8F6" className="text-[#8F7256]" />
@@ -634,7 +646,7 @@ export default function App() {
                initial={{ opacity: 0, y: 50, scale: 0.95 }}
                animate={{ opacity: 1, y: 0, scale: 1 }}
                exit={{ opacity: 0, y: 50, scale: 0.95 }}
-               className="absolute bottom-6 right-6 w-[320px] sm:w-[340px] max-h-[500px] h-[90vh] sm:h-[500px] bg-[#141A16] border border-[#2A352B] rounded-3xl shadow-2xl flex flex-col z-50 overflow-hidden"
+               className="fixed bottom-8 right-6 w-[320px] sm:w-[340px] max-h-[500px] h-[80vh] sm:h-[500px] bg-[#141A16] border border-[#2A352B] rounded-3xl shadow-2xl flex flex-col z-50 overflow-hidden"
              >
                 <div className="px-5 py-4 bg-[#1C201D] border-b border-[#2A352B] flex items-center justify-between shadow-sm z-10 shrink-0">
                     <div className="flex items-center gap-3">
