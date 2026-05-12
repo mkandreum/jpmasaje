@@ -20,6 +20,9 @@ interface Appointment {
 
 let appointments: Appointment[] = [];
 let adminTokens: any = null;
+let appConfig = {
+  bannerUrl: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+};
 
 const PORT = 3000;
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
@@ -44,10 +47,20 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  app.get("/api/app-config", (req, res) => {
+    res.json(appConfig);
+  });
+
+  app.put("/api/app-config", (req, res) => {
+    const { bannerUrl } = req.body;
+    if (bannerUrl) appConfig.bannerUrl = bannerUrl;
+    res.json(appConfig);
+  });
+
   app.get("/api/config", (req, res) => {
     res.json({ 
       hasCredentials: !!(CLIENT_ID && CLIENT_SECRET),
-      isAdminAuthenticated: !!adminTokens 
+      isGoogleConnected: !!adminTokens 
     });
   });
 
