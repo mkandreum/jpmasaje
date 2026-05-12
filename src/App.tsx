@@ -316,9 +316,9 @@ export default function App() {
   };
 
   return (
-    <div className="w-full min-h-[100dvh] bg-[#0E1410] flex flex-col items-center sm:p-6 font-sans text-[#F9F8F6]">
+    <div className="fixed inset-0 bg-[#0E1410] flex flex-col items-center sm:p-6 font-sans text-[#F9F8F6] overflow-hidden">
       <Toaster position="top-center" richColors />
-      <div className="w-full max-w-md min-h-[100dvh] sm:min-h-[850px] sm:h-[850px] sm:max-h-[96vh] bg-[#141A16] sm:rounded-[40px] shadow-2xl flex flex-col relative ring-1 ring-white/5 overflow-hidden">
+      <div className="w-full max-w-md h-full sm:h-[850px] sm:max-h-[96vh] bg-[#141A16] sm:rounded-[40px] shadow-2xl flex flex-col relative ring-1 ring-white/5 overflow-hidden">
         
         {/* Minimalist Hero */}
         <div className="relative h-64 w-full shrink-0">
