@@ -12,12 +12,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      # Coolify inyectará las variables de entorno automáticamente si las defines en su panel (sección Environment Variables).
-      # No es necesario dejarlas aquí "quemadas" o repetidas, al declararlas así, Docker tomará el valor del host (Coolify).
-      - GEMINI_API_KEY
-      - APP_URL
-      - GOOGLE_CLIENT_ID
-      - GOOGLE_CLIENT_SECRET
-      - ADMIN_EMAIL
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - APP_URL=${APP_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
     restart: unless-stopped
 
