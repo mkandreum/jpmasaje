@@ -38,9 +38,9 @@ export default function App() {
   }, []);
 
   return (
-    <div className="w-full min-h-screen bg-[#121212] flex flex-col justify-center items-center p-4 sm:p-0">
+   <div className="w-full min-h-[100dvh] bg-[#121212] flex flex-col justify-center items-center p-0 sm:p-4">
       <Toaster position="top-center" richColors />
-      <div className="w-full max-w-md h-full sm:h-[800px] sm:max-h-[90vh] bg-[#FAF9F6] sm:rounded-[40px] sm:border-[8px] border-[#1E1E1E] shadow-2xl overflow-hidden flex flex-col relative text-[#1A1A1A]">
+      <div className="w-full max-w-md h-[100dvh] sm:h-[800px] sm:max-h-[90vh] bg-[#FAF9F6] sm:rounded-[40px] border-0 sm:border-[8px] border-[#1E1E1E] shadow-2xl overflow-hidden flex flex-col relative text-[#1A1A1A]">
         
         {/* Header */}
         <header className="px-6 py-5 flex items-center justify-between bg-transparent z-10">
