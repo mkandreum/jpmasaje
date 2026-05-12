@@ -21,7 +21,9 @@ interface Appointment {
 let appointments: Appointment[] = [];
 let adminTokens: any = null;
 let appConfig = {
-  bannerUrl: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+  bannerUrl: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+  startHour: 9,
+  endHour: 18
 };
 
 const PORT = 3000;
@@ -39,7 +41,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function startServer() {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "20mb" }));
 
   // === API ROUTES ===
 
@@ -52,8 +54,10 @@ async function startServer() {
   });
 
   app.put("/api/app-config", (req, res) => {
-    const { bannerUrl } = req.body;
+    const { bannerUrl, startHour, endHour } = req.body;
     if (bannerUrl) appConfig.bannerUrl = bannerUrl;
+    if (startHour !== undefined) appConfig.startHour = Number(startHour);
+    if (endHour !== undefined) appConfig.endHour = Number(endHour);
     res.json(appConfig);
   });
 
@@ -73,7 +77,8 @@ async function startServer() {
       access_type: "offline",
       scope: [
         "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/gmail.send"
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/userinfo.email"
       ]
     });
     res.redirect(url);
@@ -85,6 +90,21 @@ async function startServer() {
       try {
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
+        
+        const oauth2 = google.oauth2({ auth: oauth2Client, version: "v2" });
+        const userInfo = await oauth2.userinfo.get();
+        const userEmail = userInfo.data.email;
+        
+        const authorizedEmail = process.env.ADMIN_EMAIL;
+        
+        if (!authorizedEmail) {
+          return res.status(500).send("Error de configuración: Debes configurar la variable de entorno ADMIN_EMAIL con tu correo de Google para habilitar el acceso de administrador.");
+        }
+        
+        if (userEmail !== authorizedEmail) {
+          return res.status(403).send(`Acceso denegado: El correo ${userEmail} no está configurado como administrador.`);
+        }
+
         adminTokens = tokens;
         res.redirect("/?admin=true");
       } catch (e) {
@@ -133,21 +153,47 @@ async function startServer() {
         });
         newAppt.eventId = event.data.id!;
         
-        // Send confirmation email
-        const messageStr = `From: "Jean Pierre Vegas" <me>\n` +
+        // Get admin email
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        const adminEmail = profile.data.emailAddress;
+
+        // Send confirmation email to client
+        const messageClientStr = `From: "Jean Pierre Vegas" <me>\n` +
           `To: ${clientEmail}\n` +
           `Subject: Confirmación de Cita - Masaje\n\n` +
           `Hola ${clientName},\n\nTu cita ha sido confirmada para el ${new Date(startTime).toLocaleString('es-ES')}.\n\nSaludos,\nJean Pierre Vegas.`;
         
-        const encodedMessage = Buffer.from(messageStr)
+        const encodedClientMessage = Buffer.from(messageClientStr)
           .toString("base64")
           .replace(/\+/g, "-")
-          .replace(/\//g, "_")
+          .replace(/\//g, "-").replace(/\//g, "_")
           .replace(/=+$/, "");
           
         await gmail.users.messages.send({
           userId: "me",
-          requestBody: { raw: encodedMessage }
+          requestBody: { raw: encodedClientMessage }
+        });
+
+        // Send confirmation email to admin
+        const messageAdminStr = `From: "Sistema de Reservas" <me>\n` +
+          `To: ${adminEmail}\n` +
+          `Subject: Nueva Reserva - ${clientName}\n\n` +
+          `¡Tienes una nueva reserva!\n\n` +
+          `Cliente: ${clientName}\n` +
+          `Email: ${clientEmail}\n` +
+          `Teléfono: ${clientPhone || 'No proporcionado'}\n` +
+          `Fecha y hora: ${new Date(startTime).toLocaleString('es-ES')}\n\n` +
+          `La reserva se ha añadido a tu Google Calendar.`;
+        
+        const encodedAdminMessage = Buffer.from(messageAdminStr)
+          .toString("base64")
+          .replace(/\+/g, "-")
+          .replace(/\//g, "-").replace(/\//g, "_")
+          .replace(/=+$/, "");
+          
+        await gmail.users.messages.send({
+          userId: "me",
+          requestBody: { raw: encodedAdminMessage }
         });
       } catch (err) {
         console.error("Error creating calendar event or sending email:", err);
@@ -183,8 +229,22 @@ async function startServer() {
         `Subject: Actualización de Cita - Masaje\n\n` +
         `Tu cita ha sido modificada al ${new Date(appt.startTime).toLocaleString('es-ES')}.`;
       
-      const encodedMessage = Buffer.from(messageStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedMessage } });
+        const encodedMessage = Buffer.from(messageStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedMessage } });
+
+        // Admin notification
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        const adminEmail = profile.data.emailAddress;
+        
+        const messageAdminStr = `From: "Sistema de Reservas" <me>\n` +
+        `To: ${adminEmail}\n` +
+        `Subject: Cita Reagendada - ${appt.clientName}\n\n` +
+        `El cliente o el sistema ha reagendado una cita.\n\n` +
+        `Cliente: ${appt.clientName}\n` +
+        `Nueva Fecha y hora: ${new Date(appt.startTime).toLocaleString('es-ES')}\n`;
+        
+        const encodedAdminMessage = Buffer.from(messageAdminStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedAdminMessage } });
 
       } catch (e) {
         console.error("Error updating event", e);
@@ -196,6 +256,8 @@ async function startServer() {
 
   app.delete("/api/appointments/:id", async (req, res) => {
     const { id } = req.params;
+    const { reason } = req.body;
+    
     const apptIndex = appointments.findIndex(a => a.id === id);
     if (apptIndex === -1) return res.status(404).json({ error: "No encontrado" });
 
@@ -209,13 +271,36 @@ async function startServer() {
           eventId: appt.eventId
         });
         
+        let cancelMessage = `Tu cita para el ${new Date(appt.startTime).toLocaleString('es-ES')} ha sido cancelada.\n`;
+        if (reason) {
+          cancelMessage += `\nMotivo y mensaje de Jean Pierre:\n"${reason}"\n`;
+        }
+        cancelMessage += `\nSi deseas, puedes volver a agendar en cualquier momento desde la web.\n\nSaludos,\nJean Pierre Vegas.`;
+
          const messageStr = `From: "Jean Pierre Vegas" <me>\n` +
         `To: ${appt.clientEmail}\n` +
-        `Subject: Cancelación de Cita - Masaje\n\n` +
-        `Tu cita para el ${new Date(appt.startTime).toLocaleString('es-ES')} ha sido cancelada.\nSi deseas, puedes volver a agendar.`;
+        `Subject: Cita Cancelada - Masaje\n\n` +
+        cancelMessage;
       
         const encodedMessage = Buffer.from(messageStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
         await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedMessage } });
+
+        // Admin notification
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        const adminEmail = profile.data.emailAddress;
+        
+        const messageAdminStr = `From: "Sistema de Reservas" <me>\n` +
+        `To: ${adminEmail}\n` +
+        `Subject: Cita Cancelada - ${appt.clientName}\n\n` +
+        `Se ha cancelado la siguiente cita.\n\n` +
+        `Cliente: ${appt.clientName}\n` +
+        `Email: ${appt.clientEmail}\n` +
+        `Fecha original: ${new Date(appt.startTime).toLocaleString('es-ES')}\n` +
+        (reason ? `\nMotivo: ${reason}` : "");
+        
+        const encodedAdminMessage = Buffer.from(messageAdminStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedAdminMessage } });
+
       } catch (e) {
         console.error("Error deleting event", e);
       }
@@ -223,6 +308,60 @@ async function startServer() {
 
     appointments.splice(apptIndex, 1);
     res.json({ success: true });
+  });
+
+  // BOT API - Secure management endpoints
+  app.post("/api/bot/verify", (req, res) => {
+    const { email, verification } = req.body;
+    if (!email || !verification) return res.status(400).json({ error: "Email y verificación requeridos" });
+    
+    const matched = appointments.filter(a => 
+      a.clientEmail.toLowerCase() === email.trim().toLowerCase() && 
+      (a.clientPhone.replace(/\s+/g, '') === verification.replace(/\s+/g, '') || 
+       a.clientName.toLowerCase() === verification.trim().toLowerCase())
+    );
+    
+    if (matched.length > 0) {
+      res.json(matched);
+    } else {
+      res.status(404).json({ error: "No se encontraron citas con esos datos." });
+    }
+  });
+
+  app.post("/api/bot/appointments/:id/reschedule", async (req, res) => {
+    const { id } = req.params;
+    const { newStartTime } = req.body;
+    const appt = appointments.find(a => a.id === id);
+    if (!appt) return res.status(404).json({ error: "Cita no encontrada" });
+
+    const endT = new Date(new Date(newStartTime).getTime() + 60*60*1000).toISOString();
+    
+    if (adminTokens && appt.eventId) {
+      try {
+        await calendar.events.patch({
+          calendarId: "primary",
+          eventId: appt.eventId,
+          requestBody: {
+            start: { dateTime: newStartTime },
+            end: { dateTime: endT }
+          }
+        });
+
+        // Email Admins
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        const adminEmail = profile.data.emailAddress;
+        
+        const notifyMsg = `From: "Sistema" <me>\nTo: ${adminEmail},${appt.clientEmail}\nSubject: Cita Reagendada - ${appt.clientName}\n\nLa cita de ${appt.clientName} ha sido reagendada al: ${new Date(newStartTime).toLocaleString('es-ES')}`;
+        const encodedNotify = Buffer.from(notifyMsg).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedNotify } });
+      } catch (e) {
+        console.error("Error updating calendar:", e);
+      }
+    }
+
+    appt.startTime = newStartTime;
+    appt.endTime = endT;
+    res.json(appt);
   });
 
   // AI Chat Route
@@ -320,9 +459,16 @@ async function startServer() {
                   }
                 });
                 newAppt.eventId = event.data.id!;
-                const messageStr = `From: "me"\nTo: ${newAppt.clientEmail}\nSubject: Cita Confirmada\n\nCita confirmada ${newAppt.startTime}`;
-                const encodedMessage = Buffer.from(messageStr).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-                await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedMessage } });
+                const profile = await gmail.users.getProfile({ userId: "me" });
+                const adminEmail = profile.data.emailAddress;
+
+                const clientMsg = `From: "Jean Pierre Vegas" <me>\nTo: ${newAppt.clientEmail}\nSubject: Cita Confirmada\n\nCita confirmada ${new Date(newAppt.startTime).toLocaleString('es-ES')}`;
+                const encodedClient = Buffer.from(clientMsg).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+                await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedClient } });
+
+                const adminMsg = `From: "Sistema de Reservas" <me>\nTo: ${adminEmail}\nSubject: Nueva Reserva (Bot) - ${newAppt.clientName}\n\nEl bot ha agendado una nueva cita:\n\nCliente: ${newAppt.clientName}\nEmail: ${newAppt.clientEmail}\nFecha: ${new Date(newAppt.startTime).toLocaleString('es-ES')}`;
+                const encodedAdmin = Buffer.from(adminMsg).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+                await gmail.users.messages.send({ userId: "me", requestBody: { raw: encodedAdmin } });
               } catch(e) {}
             }
              appointments.push(newAppt);
